@@ -100,7 +100,7 @@ int main() {
           int number_of_points = ptsx.size();
           for( int i = 0; i < number_of_points; i++){
               ptsx_car_frame[i] = (ptsx[i] - px) * cos(-psi) - (ptsy[i] - py) * sin(-psi);
-              ptsy_car_frame[i] = (ptsx[i] - px) * sin(-psi) - (ptsy[i] - py) * cos(-psi);
+              ptsy_car_frame[i] = (ptsx[i] - px) * sin(-psi) + (ptsy[i] - py) * cos(-psi);
 
           }
 
@@ -125,7 +125,7 @@ int main() {
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
-          msgJson["steering_angle"] = steer_value/deg2rad(25);
+          msgJson["steering_angle"] = steer_value/(deg2rad(25));
           msgJson["throttle"] = throttle_value;
 
           //Display the MPC predicted trajectory 
@@ -150,8 +150,8 @@ int main() {
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
 
-          int number_points = 30;
-          double interpolate = 1.5;
+          int number_points = 100;
+          double interpolate = 1.0;
           for(int i =1; i < number_points; i++){
               next_x_vals.push_back(interpolate * i);
               next_y_vals.push_back(polyeval(coeffs, interpolate * i));

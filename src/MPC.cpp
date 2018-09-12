@@ -6,18 +6,21 @@
 using CppAD::AD;
 
 // TODO: Set the timestep length and duration
-size_t N = 25;
+size_t N = 10;
 double dt = 0.1;
 
 
 // Cost function weights
-const int cte_weight = 1000;
-const int epsi_weight = 1000;
+const int cte_weight = 1500;
+const int epsi_weight = 1500;
 const int v_weight = 1;
-const int delta_weight = 10;
-const int a_weight = 10;
-const int diff_delta_weight = 100;
-const int diff_a_weight = 10;
+
+const int delta_weight = 200;
+const int a_weight = 20;
+const int vel_and_steering_weight = 500;
+
+const int diff_delta_weight = 1000;
+const int diff_a_weight = 100;
 
 
 size_t x_start = 0;
@@ -42,7 +45,7 @@ size_t a_start = delta_start + N - 1;
 // This is the length from front to CoG that has a similar radius.
 const double Lf = 2.67;
 
-const double ref_v = 20.0;
+const double ref_v = 70.0;
 
 class FG_eval {
  public:
@@ -65,18 +68,25 @@ class FG_eval {
 
       // main component of cost
       for(int t = 0; t < N; t++){
-          //cross track error
+          // Minimise cross track error
           fg[0] += cte_weight*CppAD::pow(vars[cte_start + t], 2);
-          //oritention error
+          // Minimise oritention error
           fg[0] += epsi_weight*CppAD::pow(vars[epsi_start + t], 2);
-          // velcoty error
+          // Minimise velcoty error
           fg[0] += v_weight*CppAD::pow(vars[v_start + t] - ref_v, 2);
       }
 
       // Minimise the use of actuators
       for ( int t =0; t < N -1; t++){
+          // Minimise steering control
           fg[0] += delta_weight*CppAD::pow(vars[delta_start + t], 2);
+          // Minimise acceleration
           fg[0] += a_weight*CppAD::pow(vars[a_start + t ], 2);
+          // The term below has the effect of creating a correlation between the steering control and velocity.
+          // At high speeds steering will become expensive in the cost, and at slow speeds large steering controls become cheap.
+          // The effect of this is that the vechile slows down to when taking corners. Using this term had a substainl impact on t
+          // he overall stablity on the mpc controller.
+          fg[0] +=  vel_and_steering_weight*CppAD::pow((vars[t + v_start]*vars[t+delta_start]), 2);
       }
 
       for ( int t = 0; t< N -2; t++){
@@ -87,8 +97,6 @@ class FG_eval {
 
       //
       // Setup Constraints
-      //
-      // NOTE: In this section you'll setup the model constraints.
 
       // Initial constraints
       //
@@ -131,7 +139,6 @@ class FG_eval {
         AD<double> f0 =  coeffs[0] + coeffs[1] * x0 + coeffs[2] * CppAD::pow(x0, 2) + coeffs[3] * CppAD::pow(x0, 3);
         AD<double> psides0 = CppAD::atan(coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * CppAD::pow(x0, 2));
 
-
         // Here's `x` to get you started.
         // The idea here is to constraint this value to be 0.
         //
@@ -141,10 +148,10 @@ class FG_eval {
 
         fg[1 + x_start + t] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
         fg[1 + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
-        fg[1 + psi_start + t] = psi1 - (psi0 + v0 * delta0 / Lf * dt);
+        fg[1 + psi_start + t] = psi1 - (psi0 - v0 * delta0 / Lf * dt);
         fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
         fg[1 + cte_start + t] = cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
-        fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
+        fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) - v0 * delta0 / Lf * dt);
       }
   }
 };
@@ -273,9 +280,9 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   result_vector.push_back(solution.x[delta_start]);
   result_vector.push_back(solution.x[a_start]);
   // x and y predictions
-  for(int i = 1; i < N; i++){
-      result_vector.push_back(solution.x[x_start + i]);
-      result_vector.push_back(solution.x[y_start + i]);
+  for(int i = 0; i < N-1; i++){
+      result_vector.push_back(solution.x[x_start + i+1]);
+      result_vector.push_back(solution.x[y_start + i+1]);
   }
 
   return result_vector;
