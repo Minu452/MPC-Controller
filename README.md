@@ -2,8 +2,94 @@
 Self-Driving Car Engineer Nanodegree Program
 
 ---
+This project aims to build a C++ implementation of a Model Predictive  controller to control the steering and throttle actuation's for an autonomous vehicle in the udacity simulation environment. 
 
-## Dependencies
+---
+
+## Rubric points
+
+### The model :
+
+The kinematic model used in the MPC was composed of a state space made up of
+
+* X position (x)
+* Y postion (y)
+* Orientation angle (psi)
+* Velocity (v)
+* Cross track error (cte)
+* Orientation angle error (epsi)
+
+The kinematic model assumes the following actuator inputs are input to the model and can be used to evolve the state over time t.
+
+* Steering angle (delta)
+* Acceleration (a)
+
+The kinematic model then relates the vehicle state at time t+1 to the vehicle state at time t by,
+
+
+
+![dastate_equations](https://github.com/joshwadd/MPC-Controller/blob/master/images/state_equations.png?raw=true)
+
+
+
+### Timestep and Elapsed Duration (N & dt)
+
+The number of timesteps and the duration of each timestep make up the prediction horizon T, which the MPC model optimizes the future predictions over. In the MPC,  T and therefre N and dt are hyper paramaters that require tuning. It only makes sense for the prediction horizon to be of the order of a couple of seconds as predicting futher into the future is unhelpful as the enviroment is likly to change. This is espeically true when moving at high speed.
+
+
+
+The final hyper parameters chosen for the MPC was N = 10, dt =0.1. This was arrived at as I only considered a prediction horizon of 1 second. For controlling a vechicle at high speeds, frequent acuations are required. 0.1 seconds was found to be helpful as this timestep also happened to be the same as the system latency in the control system. This helpfully allowed taking the latency into consideration in the state model as discussed below.
+
+
+
+When considering a very small dt, many timesteps and thus many variables need to be optimized with in each mpc loop. This greatly increases the computational cost resulting the model not being responsive enough, or not fining a adquetely accurate solution in the numerical optimization.
+
+
+
+### Polynomial Fitting and MPC Preprocessing
+
+Waypoints for the desired vehicle path are provided to the controller from the planner, these waypoints are in the unity co-ordinate frame. For simplification of the resulting calculations these waypoints are first transformed into the vechicle coordinate system.
+
+This is done by simply using the known current state of the vehicle and transforming it using the triganomic relations below,  so that the first waypoint and current x and y position occures at x =0 y = 0. A third degree polynomial is then fitted to the way points in the vehicle frame.
+
+
+
+```c++
+ Eigen::VectorXd ptsx_car_frame(ptsx.size());
+ Eigen::VectorXd ptsy_car_frame(ptsx.size());
+
+ // Transform the path waypoints from the unity cordinate system,
+// into the car cordinate system. (Simpfies the error calculation)
+int number_of_points = ptsx.size();
+for( int i = 0; i < number_of_points; i++){
+     ptsx_car_frame[i] = (ptsx[i] - px) * cos(-psi) - (ptsy[i] - py) * sin(-psi);
+     ptsy_car_frame[i] = (ptsx[i] - px) * sin(-psi) + (ptsy[i] - py) * cos(-psi);
+}
+```
+
+
+
+### Model Predictive Control with Latency
+
+Often in real control systems an amount of latency exsists between an actuation signal and the resulting output. To simulate this process a 100 ms latency was added in the simulation between the calculated control signal and sending it to the simlulator. We can then adjust the state equations of the model to account for this delay when computing the control inputs. The approach taken here to time lag the actuations within the constraints calcuations defined by the state equtation by a single time step for steps t >1.
+
+
+
+```c++
+ if( t > 1){ // to account for a single timestep delay in accuation
+            delta0 = vars[delta_start + t - 2];
+            a0 = vars[a_start + t - 2];
+ }
+
+```
+
+As our timestep is the same duration as the latency, the actuations in the kenematic model should now occur exactly when they would happen in the simulation enviroment.
+
+
+
+---
+
+# Dependencies
 
 * cmake >= 3.5
  * All OSes: [click here for installation instructions](https://cmake.org/install/)
